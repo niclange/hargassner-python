@@ -4,6 +4,5 @@ CREATE TABLE `consommation` (
 	`Tmoy` DECIMAL(5,1) NOT NULL,
 	PRIMARY KEY (`dateB`)
 )
-COLLATE='utf8_general_ci'
 ENGINE=InnoDB
 ;
