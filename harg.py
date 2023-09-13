@@ -1,15 +1,14 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
-# auteur : Jahislove
-# version 1.2
-# python version 2.7
+# auteur : niclange
+# version 1.3
+# python version 3.x
 
 # ce script tourne sur un Rasberry pi
 # il ecoute une chaudiere a granulés Hargassner NanoPK sur son port telnet
 # et il ecrit les valeurs dans une BDD MySQL ou MariaDB sur un NAS Synology
-# fonctionne avec les chaudieres data, classic and HSV  equipées de touchtronic + passerelle internet
-# il est possible que ca fontionne sans passerelle (a tester)
+# fonctionne avec les chaudieres data, classic and HSV  equipées de touchtronic 
 # la requete pour créer les tables sont disponibles dans les fichiers create_table_data.sql et create_table_consommation.sql
 # prérequis : MysQLdb doit etre installé sur la machine
 # optionnel : SQlite3 doit etre installé sur la machine pour activer le mode backup qui copie en local en cas d'indispo de MySQL
@@ -22,10 +21,10 @@
 # to create the database, use the query in createBDD.sql
 
 # Import socket module
-import socket               
+import telnetlib               
 import time
 from datetime import date,datetime,timedelta
-import MySQLdb   # MySQLdb must be installed by yourself
+import mariadb   # MySQLdb must be installed by yourself
 import sys
 import os.path
 import logging
@@ -34,15 +33,15 @@ from threading import Thread
 #----------------------------------------------------------#
 #        parametres                                        #
 #----------------------------------------------------------#
-DB_SERVER = '192.168.0.111'   # MySQL : IP server (localhost si mySQL est sur la meme machine)
+DB_SERVER = 'localhost'   # MySQL : IP server (localhost si mySQL est sur la meme machine)
 DB_BASE = 'Hargassner'        # MySQL : database name
 DB_USER = 'hargassner'        # MySQL : user  
 DB_PWD = 'password'           # MySQL : password 
-IP_CHAUDIERE = '192.168.0.198'
-FIRMWARE_CHAUD = '14g'        # firmware de la chaudiere
-PATH_HARG = "/home/pi/hargassner/" #chemin ou se trouve ce script
+IP_CHAUDIERE = '192.168.1.84'
+FIRMWARE_CHAUD = 'x'        # firmware de la chaudiere
+PATH_HARG = "/home/nlange/hargassner/" #chemin ou se trouve ce script
 
-MODE_BACKUP = True          # True si SQlite3 est installé , sinon False  
+MODE_BACKUP = False          # True si SQlite3 est installé , sinon False  
 INSERT_GROUPED = 1          # regroupe n reception avant d'ecrire en base :INSERT_GROUPED x FREQUENCY = temps en sec
 FREQUENCY = 60              # Periodicité (reduit le volume de data mais reduit la précision)
                             # (1 = toutes)     1 mesure chaque seconde
@@ -65,7 +64,7 @@ elif FIRMWARE_CHAUD == '14f':
 elif FIRMWARE_CHAUD == '14g':
     nbre_param = 190
 else:
-    nbre_param = 174
+    nbre_param = 151
    
 #----------------------------------------------------------#
 #        definition des logs                               #
@@ -84,311 +83,43 @@ logger.addHandler(handler_debug)
 #----------------------------------------------------------#
 while True:
     try:
-        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)         
-        s.connect((IP_CHAUDIERE, PORT))
-        logger.info("Creation du socket telnet OK")
+        tn = telnetlib.Telnet(IP_CHAUDIERE)
+        print(tn.read_all().decode("ascii"))
         break
     except:
         logger.critical("Connexion a la chaudiere impossible")
         time.sleep(5)
         
-#----------------------------------------------------------#
-#     definition query with or without BACKUP SQLITE       #
-#----------------------------------------------------------#
-if MODE_BACKUP == True:
-    import sqlite3
-    if os.path.isfile(PATH_HARG + 'harg_bck.sqlite3'): # if SQlite exist then resume backup mode
-        backup_mode = 1
-
-    # -------------query with BACKUP---------------------------#
-    def query_db(sql):
-        global backup_mode
-        global backup_row
-        try:
-            db = MySQLdb.connect(DB_SERVER, DB_USER, DB_PWD, DB_BASE)
-            cursor = db.cursor()
-            #---------------------------------------------------------------#
-            #     Normal MySQL database INSERT                              #
-            #---------------------------------------------------------------#
-            if backup_mode == 0:
-                cursor.execute(sql)
-                db.commit()
-                db.close()
-                logger.debug("Ecriture en bdd OK")
-            #---------------------------------------------------------------#
-            # RESTORE : when MySQL is available again : restore from SQlite #
-            #---------------------------------------------------------------#
-            else:
-                logger.warning('MySQL is OK now : Restore mode started')
-                
-                db_bck = sqlite3.connect(PATH_HARG + 'harg_bck.sqlite3')
-                db_bck.text_factory = str #tell sqlite to work with str instead of unicode
-                cursor_bck = db_bck.cursor()
-
-                cursor_bck.execute("""SELECT  * FROM data ORDER BY dateB ASC """) #'DEFAULT' as id,
-                result_data = cursor_bck.fetchall ()
-               
-                for row in result_data:
-                    row2 = ('DEFAULT',) + row[1:nbre_param+1] # remplace null par DEFAULT
-                    backup_row += 1
-                    cursor.execute("""INSERT INTO data VALUES {0}""".format(row2))
-                    
-                db_bck.close()
-                logger.warning('%s rows restored to MySQL', str(backup_row))
-               
-                backup_row = 0
-                backup_mode = 0
-                os.remove(PATH_HARG + 'harg_bck.sqlite3')
-                logger.warning('Restore done, SQlite3 file deleted, returning to normal mode')
-                
-                cursor.execute(sql)
-                db.commit()
-                db.close()
-
-        #---------------------------------------------------------------#
-        #     BACKUP : when MySQL is down => local SQlite INSERT        #
-        #---------------------------------------------------------------#
-        except MySQLdb.Error:
-            db_bck = sqlite3.connect(PATH_HARG + 'harg_bck.sqlite3')
-            cursor_bck = db_bck.cursor()
-
-            if backup_mode == 0: #create table on first run
-                logger.warning('MySQL is down : Backup mode started')
-                create_data = """CREATE TABLE IF NOT EXISTS data (
-                `id` INT(11) ,
-                `dateB` DATETIME NOT NULL,
-                `c0` INT(11) NOT NULL,
-                `c1` DECIMAL(7,2) NOT NULL,
-                `c2` DECIMAL(7,2) NOT NULL,
-                `c3` DECIMAL(7,2) NOT NULL,
-                `c4` DECIMAL(7,2) NOT NULL,
-                `c5` DECIMAL(7,2) NOT NULL,
-                `c6` DECIMAL(7,2) NOT NULL,
-                `c7` DECIMAL(7,2) NOT NULL,
-                `c8` DECIMAL(7,2) NOT NULL,
-                `c9` DECIMAL(7,2) NOT NULL,
-                `c10` DECIMAL(7,2) NOT NULL,
-                `c11` DECIMAL(7,2) NOT NULL,
-                `c12` DECIMAL(7,2) NOT NULL,
-                `c13` DECIMAL(7,2) NOT NULL,
-                `c14` DECIMAL(7,2) NOT NULL,
-                `c15` DECIMAL(7,2) NOT NULL,
-                `c16` DECIMAL(7,2) NOT NULL,
-                `c17` DECIMAL(7,2) NOT NULL,
-                `c18` DECIMAL(7,2) NOT NULL,
-                `c19` DECIMAL(7,2) NOT NULL,
-                `c20` DECIMAL(7,2) NOT NULL,
-                `c21` DECIMAL(7,2) NOT NULL,
-                `c22` DECIMAL(7,2) NOT NULL,
-                `c23` DECIMAL(7,2) NOT NULL,
-                `c24` DECIMAL(7,2) NOT NULL,
-                `c25` DECIMAL(7,2) NOT NULL,
-                `c26` DECIMAL(7,2) NOT NULL,
-                `c27` DECIMAL(7,2) NOT NULL,
-                `c28` DECIMAL(7,2) NOT NULL,
-                `c29` DECIMAL(7,2) NOT NULL,
-                `c30` DECIMAL(7,2) NOT NULL,
-                `c31` DECIMAL(7,2) NOT NULL,
-                `c32` DECIMAL(7,2) NOT NULL,
-                `c33` DECIMAL(7,2) NOT NULL,
-                `c34` DECIMAL(7,2) NOT NULL,
-                `c35` DECIMAL(7,2) NOT NULL,
-                `c36` DECIMAL(7,2) NOT NULL,
-                `c37` DECIMAL(7,2) NOT NULL,
-                `c38` DECIMAL(7,2) NOT NULL,
-                `c39` DECIMAL(7,2) NOT NULL,
-                `c40` DECIMAL(7,2) NOT NULL,
-                `c41` DECIMAL(7,2) NOT NULL,
-                `c42` DECIMAL(7,2) NOT NULL,
-                `c43` DECIMAL(7,2) NOT NULL,
-                `c44` DECIMAL(7,2) NOT NULL,
-                `c45` DECIMAL(7,2) NOT NULL,
-                `c46` DECIMAL(7,2) NOT NULL,
-                `c47` DECIMAL(7,2) NOT NULL,
-                `c48` DECIMAL(7,2) NOT NULL,
-                `c49` DECIMAL(7,2) NOT NULL,
-                `c50` DECIMAL(7,2) NOT NULL,
-                `c51` DECIMAL(7,2) NOT NULL,
-                `c52` DECIMAL(7,2) NOT NULL,
-                `c53` DECIMAL(7,2) NOT NULL,
-                `c54` DECIMAL(7,2) NOT NULL,
-                `c55` DECIMAL(7,2) NOT NULL,
-                `c56` DECIMAL(7,2) NOT NULL,
-                `c57` DECIMAL(7,2) NOT NULL,
-                `c58` DECIMAL(7,2) NOT NULL,
-                `c59` DECIMAL(7,2) NOT NULL,
-                `c60` DECIMAL(7,2) NOT NULL,
-                `c61` DECIMAL(7,2) NOT NULL,
-                `c62` DECIMAL(7,2) NOT NULL,
-                `c63` DECIMAL(7,2) NOT NULL,
-                `c64` DECIMAL(7,2) NOT NULL,
-                `c65` DECIMAL(7,2) NOT NULL,
-                `c66` DECIMAL(7,2) NOT NULL,
-                `c67` DECIMAL(7,2) NOT NULL,
-                `c68` DECIMAL(7,2) NOT NULL,
-                `c69` DECIMAL(7,2) NOT NULL,
-                `c70` DECIMAL(7,2) NOT NULL,
-                `c71` DECIMAL(7,2) NOT NULL,
-                `c72` DECIMAL(7,2) NOT NULL,
-                `c73` DECIMAL(7,2) NOT NULL,
-                `c74` DECIMAL(7,2) NOT NULL,
-                `c75` DECIMAL(7,2) NOT NULL,
-                `c76` DECIMAL(7,2) NOT NULL,
-                `c77` DECIMAL(7,2) NOT NULL,
-                `c78` DECIMAL(7,2) NOT NULL,
-                `c79` DECIMAL(7,2) NOT NULL,
-                `c80` DECIMAL(7,2) NOT NULL,
-                `c81` DECIMAL(7,2) NOT NULL,
-                `c82` DECIMAL(7,2) NOT NULL,
-                `c83` DECIMAL(7,2) NOT NULL,
-                `c84` DECIMAL(7,2) NOT NULL,
-                `c85` DECIMAL(7,2) NOT NULL,
-                `c86` DECIMAL(7,2) NOT NULL,
-                `c87` DECIMAL(7,2) NOT NULL,
-                `c88` DECIMAL(7,2) NOT NULL,
-                `c89` DECIMAL(7,2) NOT NULL,
-                `c90` DECIMAL(7,2) NOT NULL,
-                `c91` DECIMAL(7,2) NOT NULL,
-                `c92` DECIMAL(7,2) NOT NULL,
-                `c93` DECIMAL(7,2) NOT NULL,
-                `c94` DECIMAL(7,2) NOT NULL,
-                `c95` DECIMAL(7,2) NOT NULL,
-                `c96` DECIMAL(7,2) NOT NULL,
-                `c97` DECIMAL(7,2) NOT NULL,
-                `c98` DECIMAL(7,2) NOT NULL,
-                `c99` DECIMAL(7,2) NOT NULL,
-                `c100` DECIMAL(7,2) NOT NULL,
-                `c101` DECIMAL(7,2) NOT NULL,
-                `c102` DECIMAL(7,2) NOT NULL,
-                `c103` DECIMAL(7,2) NOT NULL,
-                `c104` DECIMAL(7,2) NOT NULL,
-                `c105` DECIMAL(7,2) NOT NULL,
-                `c106` DECIMAL(7,2) NOT NULL,
-                `c107` DECIMAL(7,2) NOT NULL,
-                `c108` DECIMAL(7,2) NOT NULL,
-                `c109` DECIMAL(7,2) NOT NULL,
-                `c110` DECIMAL(7,2) NOT NULL,
-                `c111` DECIMAL(7,2) NOT NULL,
-                `c112` DECIMAL(7,2) NOT NULL,
-                `c113` DECIMAL(7,2) NOT NULL,
-                `c114` DECIMAL(7,2) NOT NULL,
-                `c115` DECIMAL(7,2) NOT NULL,
-                `c116` DECIMAL(7,2) NOT NULL,
-                `c117` DECIMAL(7,2) NOT NULL,
-                `c118` DECIMAL(7,2) NOT NULL,
-                `c119` DECIMAL(7,2) NOT NULL,
-                `c120` DECIMAL(7,2) NOT NULL,
-                `c121` DECIMAL(7,2) NOT NULL,
-                `c122` DECIMAL(7,2) NOT NULL,
-                `c123` DECIMAL(7,2) NOT NULL,
-                `c124` DECIMAL(7,2) NOT NULL,
-                `c125` DECIMAL(7,2) NOT NULL,
-                `c126` DECIMAL(7,2) NOT NULL,
-                `c127` DECIMAL(7,2) NOT NULL,
-                `c128` DECIMAL(7,2) NOT NULL,
-                `c129` DECIMAL(7,2) NOT NULL,
-                `c130` DECIMAL(7,2) NOT NULL,
-                `c131` DECIMAL(7,2) NOT NULL,
-                `c132` DECIMAL(7,2) NOT NULL,
-                `c133` DECIMAL(7,2) NOT NULL,
-                `c134` DECIMAL(7,2) NOT NULL,
-                `c135` DECIMAL(7,2) NOT NULL,
-                `c136` DECIMAL(7,2) NOT NULL,
-                `c137` DECIMAL(7,2) NOT NULL,
-                `c138` DECIMAL(7,2) NOT NULL,
-                `c139` DECIMAL(7,2) NOT NULL,
-                `c140` DECIMAL(7,2) NOT NULL,
-                `c141` DECIMAL(7,2) NOT NULL,
-                `c142` DECIMAL(7,2) NOT NULL,
-                `c143` DECIMAL(7,2) NOT NULL,
-                `c144` DECIMAL(7,2) NOT NULL,
-                `c145` DECIMAL(7,2) NOT NULL,
-                `c146` DECIMAL(7,2) NOT NULL,
-                `c147` DECIMAL(7,2) NOT NULL,
-                `c148` DECIMAL(7,2) NOT NULL,
-                `c149` DECIMAL(7,2) NOT NULL,
-                `c150` DECIMAL(7,2) NOT NULL,
-                `c151` DECIMAL(7,2) NOT NULL,
-                `c152` DECIMAL(7,2) NOT NULL,
-                `c153` DECIMAL(7,2) NOT NULL,
-                `c154` DECIMAL(7,2) NOT NULL,
-                `c155` DECIMAL(7,2) NOT NULL,
-                `c156` DECIMAL(7,2) NOT NULL,
-                `c157` DECIMAL(7,2) NOT NULL,
-                `c158` DECIMAL(7,2) NOT NULL,
-                `c159` DECIMAL(7,2) NOT NULL,
-                `c160` DECIMAL(7,2) NOT NULL,
-                `c161` DECIMAL(7,2) NOT NULL,
-                `c162` DECIMAL(7,2) NOT NULL,
-                `c163` DECIMAL(7,2) NOT NULL,
-                `c164` DECIMAL(7,2) NOT NULL,
-                `c165` DECIMAL(7,2) NOT NULL,
-                `c166` DECIMAL(7,2) NOT NULL,
-                `c167` DECIMAL(7,2) NOT NULL,
-                `c168` DECIMAL(7,2) NOT NULL,
-                `c169` DECIMAL(7,2) NOT NULL,
-                `c170` DECIMAL(7,2) NOT NULL,
-                `c171` DECIMAL(7,2) NOT NULL,
-                `c172` DECIMAL(7,2) NOT NULL,
-                `c173` DECIMAL(7,2) NOT NULL,
-                `c174` DECIMAL(7,2) NOT NULL,
-                `c175` DECIMAL(7,2) NOT NULL,
-                `c176` DECIMAL(7,2) NOT NULL,
-                `c177` DECIMAL(7,2) NOT NULL,
-                `c178` DECIMAL(7,2) NOT NULL,
-                `c179` DECIMAL(7,2) NOT NULL,
-                `c180` DECIMAL(7,2) NOT NULL,
-                `c181` DECIMAL(7,2) NOT NULL,
-                `c182` CHAR(5) NOT NULL,
-                `c183` DECIMAL(7,2) NOT NULL,
-                `c184` DECIMAL(7,2) NOT NULL,
-                `c185` DECIMAL(7,2) NOT NULL,
-                `c186` DECIMAL(7,2) NOT NULL,
-                `c187` DECIMAL(7,2) NOT NULL,
-                `c188` DECIMAL(7,2) NOT NULL
-                ) ;"""
-
-                cursor_bck.execute(create_data)
-                logger.warning('SQlite created')
-
-            backup_mode = 1
-            cursor_bck.execute(sql)
-            db_bck.commit()
-            db_bck.close()
-else:   
-    # -------------query without BACKUP------------------------#
-    def query_db(sql):
-        try:
-            db = MySQLdb.connect(DB_SERVER, DB_USER, DB_PWD, DB_BASE)
-            cursor = db.cursor()
-            cursor.execute(sql)
-            db.commit()
-            db.close()
-            logger.debug("Ecriture en bdd OK")
-            
-        except MySQLdb.Error:
-            logger.error("MySQL is down : %s", MySQLdb.Error)
-    
+try:
+    db = mariadb.connect(host=DB_SERVER, 
+                         user=DB_USER,  
+                         password=DB_PWD, 
+                         port=3306, 
+                         database=DB_BASE)
+    cursor = db.cursor()
+except mariadb.Error as e:
+        logger.error("MariaDB is down : %s", e)
+        print(f"Error connecting to MariaDB Platform: {e}")
+        sys.exit(1)   
+  
+def query_db(sql):
+    try: 
+        cursor.execute(sql)
+        logger.debug("Ecriture en bdd OK")
+    except mariadb.Error as e: 
+        print(f"Error: {e}")    
+   
 #----------------------------------------------------------#
 #             initialisation table consommation            #
 #             au 1er lancement du script
 #             si la table est vide on rempli une ligne a vide
 #----------------------------------------------------------#
 try:
-    db = MySQLdb.connect(DB_SERVER, DB_USER, DB_PWD, DB_BASE)
-    cursor = db.cursor()
-
-    try:
-        cursor.execute("""SELECT COUNT(dateB) FROM consommation """)
-        compt = cursor.fetchone ()
-        if compt[0] == 0:
-            dateH =  date.today() + timedelta(days=-1)
-            cursor.execute("""INSERT INTO consommation (dateB, conso, Tmoy) VALUES ('%s','%s','%s')""" % (dateH,'0','0'))
-    except:
-        logger.error('lecture/ecriture table consommation impossible')
-
-    db.commit()
-    db.close()
+    cursor.execute("""SELECT COUNT(dateB) FROM consommation """)
+    compt = cursor.fetchone ()
+    if compt[0] == 0:
+        dateH =  date.today() + timedelta(days=-1)
+        cursor.execute("INSERT INTO consommation (dateB, conso, Tmoy) VALUES (?,?,?)", (dateH,0,0))
 except:
     logger.error('Erreur initialisation table consommation')
 
