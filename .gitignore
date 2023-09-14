@@ -18,4 +18,5 @@ $RECYCLE.BIN/
 # Mac crap
 .DS_Store
 
+trace.log
 

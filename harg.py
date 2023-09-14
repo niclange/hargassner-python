@@ -23,35 +23,31 @@
 # Import socket module
 import telnetlib               
 import time
-from datetime import date,datetime,timedelta
+from datetime import date,timedelta
 import mariadb   # MySQLdb must be installed by yourself
 import sys
-import os.path
 import logging
-from threading import Thread
+import schedule
+
 
 #----------------------------------------------------------#
 #        parametres                                        #
 #----------------------------------------------------------#
 DB_SERVER = 'localhost'   # MySQL : IP server (localhost si mySQL est sur la meme machine)
 DB_BASE = 'Hargassner'        # MySQL : database name
-DB_USER = 'hargassner'        # MySQL : user  
-DB_PWD = 'password'           # MySQL : password 
+DB_USER = 'root'        # MySQL : user  
+DB_PWD = ''           # MySQL : password 
 IP_CHAUDIERE = '192.168.1.84'
 FIRMWARE_CHAUD = 'x'        # firmware de la chaudiere
-PATH_HARG = "/home/nlange/hargassner/" #chemin ou se trouve ce script
 
 MODE_BACKUP = False          # True si SQlite3 est installé , sinon False  
-INSERT_GROUPED = 1          # regroupe n reception avant d'ecrire en base :INSERT_GROUPED x FREQUENCY = temps en sec
-FREQUENCY = 60              # Periodicité (reduit le volume de data mais reduit la précision)
+FREQUENCY = 30              # Periodicité (reduit le volume de data mais reduit la précision)
                             # (1 = toutes)     1 mesure chaque seconde
                             # (5)              1 mesure toutes les 5 secondes
                             # ...
                             # une valeur trop faible entraine de gros volume en BDD et surtout des grosses 
                             # lenteurs pour afficher les graphiques : defaut 60sec , evitez de descendre sous les 10 sec
-# ne pas modifier ci dessous
-MSGBUFSIZE=600
-PORT = 23    
+  
 backup_row = 0
 backup_mode = 0
 
@@ -64,16 +60,16 @@ elif FIRMWARE_CHAUD == '14f':
 elif FIRMWARE_CHAUD == '14g':
     nbre_param = 190
 else:
-    nbre_param = 151
+    nbre_param = 153
    
 #----------------------------------------------------------#
 #        definition des logs                               #
 #----------------------------------------------------------#
 formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger('log')
-logger.setLevel(logging.INFO) # choisir le niveau de log : DEBUG, INFO, ERROR...
+logger.setLevel(logging.DEBUG) # choisir le niveau de log : DEBUG, INFO, ERROR...
 
-handler_debug = logging.FileHandler(PATH_HARG + "trace.log", mode="a", encoding="utf-8")
+handler_debug = logging.FileHandler("trace.log", mode="a", encoding="utf-8")
 handler_debug.setFormatter(formatter)
 handler_debug.setLevel(logging.DEBUG)
 logger.addHandler(handler_debug)
@@ -81,14 +77,16 @@ logger.addHandler(handler_debug)
 #----------------------------------------------------------#
 #        socket for Connection to Hargassner               #
 #----------------------------------------------------------#
+i=0 
 while True:
     try:
-        tn = telnetlib.Telnet(IP_CHAUDIERE)
-        print(tn.read_all().decode("ascii"))
+        tn = telnetlib.Telnet(host=IP_CHAUDIERE)
+        data = tn.read_until(b"\n", timeout=2).decode("ascii")
+        print(data)
         break
     except:
         logger.critical("Connexion a la chaudiere impossible")
-        time.sleep(5)
+        sys.exit("Erreur connexion chaudiere")
         
 try:
     db = mariadb.connect(host=DB_SERVER, 
@@ -96,32 +94,16 @@ try:
                          password=DB_PWD, 
                          port=3306, 
                          database=DB_BASE)
-    cursor = db.cursor()
+    db.autocommit = True
+    db.auto_reconnect = True
+    
 except mariadb.Error as e:
         logger.error("MariaDB is down : %s", e)
         print(f"Error connecting to MariaDB Platform: {e}")
         sys.exit(1)   
   
-def query_db(sql):
-    try: 
-        cursor.execute(sql)
-        logger.debug("Ecriture en bdd OK")
-    except mariadb.Error as e: 
-        print(f"Error: {e}")    
-   
-#----------------------------------------------------------#
-#             initialisation table consommation            #
-#             au 1er lancement du script
-#             si la table est vide on rempli une ligne a vide
-#----------------------------------------------------------#
-try:
-    cursor.execute("""SELECT COUNT(dateB) FROM consommation """)
-    compt = cursor.fetchone ()
-    if compt[0] == 0:
-        dateH =  date.today() + timedelta(days=-1)
-        cursor.execute("INSERT INTO consommation (dateB, conso, Tmoy) VALUES (?,?,?)", (dateH,0,0))
-except:
-    logger.error('Erreur initialisation table consommation')
+
+
 
 #----------------------------------------------------------#
 #             declaration threads                          #
@@ -133,7 +115,7 @@ except:
 def thread_consommation():
     while True:
         try:
-            db = MySQLdb.connect(DB_SERVER, DB_USER, DB_PWD, DB_BASE)
+          
             cursor = db.cursor()
             
             cursor.execute("""SELECT dateB FROM consommation
@@ -155,82 +137,44 @@ def thread_consommation():
         time.sleep(7200)
 
 
-#################################################################
-# ce thread ecoute la chaudiere qui emet toute les 1 seconde
-# la suite du programme vient piocher la valeur du buffer quand elle en a besoin (60sec par defaut).
-# cette methode est plus efficace que d'ecouter la chaudiere uniquement quand on a besoin
-# car on tombe sur des buffer en cours d'emission(incomplet) ce qui genere beaucoup d'erreur
-def thread_buffer():
-    global bufferOK
-    while True:
-        try:
-            buffer = s.recv(MSGBUFSIZE) # waiting a packet (waiting as long as s.recv is empty)
-            if buffer[0:2] == "pm":
-                bufferOK = buffer
-            else:
-                logger.debug('buffer ERREUR pm')
-        except:
-            logger.error('buffer ERREUR lecture')
-        # except KeyboardInterrupt:
-            # thread1._Thread__stop()
-            # break
 
-## execution thread parallele#############################################
-
-thread1 = Thread(target=thread_buffer)
-thread2 = Thread(target=thread_consommation)
-thread1.start()
-thread2.start()
-time.sleep(5) #laisse le temps au buffer de se remplir
+#thread2 = Thread(target=thread_consommation)
+#thread2.start()
+#time.sleep(5) #laisse le temps au buffer de se remplir
     
 #----------------------------------------------------------#
 #             suite du programme                           #
 #----------------------------------------------------------#
-    
-i=0
-tableau = []
+
 #------preparation requete----------
-list_champ = ",'%s'" * nbre_param
+list_champ = ", ?" * nbre_param
 requete = "INSERT INTO data  VALUES (null" + list_champ + ")" # null correspond au champ id
  
-while True:
-    try:
-        if bufferOK[0:2] == "pm":
-            datebuff = time.strftime('%Y-%m-%d %H:%M:%S') #formating date for mySQL
-            buff_liste=bufferOK.split()    # transforme la string du buffer en liste 
-            logger.debug(buff_liste)
-            buff_liste[0] = datebuff       # remplace la valeur "pm" par la date
-            list_liste = buff_liste [0:nbre_param]# selectionne les valeurs voulues, la valeur (nbre_param)doit correspondre au nombre de %s ci dessous
-            tupl_liste = tuple(list_liste) # transforme la liste en tuple (necessaire pour le INSERT)
-            tableau.append(tupl_liste)     # cumule les tuples dans un tableau
-            i = i + 1
-            try:
-                if i == INSERT_GROUPED:
-                    tableau = tuple(tableau)  # crée un tuple de tuple
-                    for x in range(INSERT_GROUPED):
-                        query_db( requete % tableau[x] ) 
-                    
-                    logger.debug('write DB : %s', tableau[0][0])
-                    i = 0
-                    tableau = []
-                time.sleep(FREQUENCY - 1)
-            except:
-                logger.error('insert KO')
-        else:
-            logger.debug(bufferOK)
+def registerData():
+    message = tn.read_until(b"\n", timeout=2).decode("ascii")
+    if message[0:2] == "pm":
+        datebuff = time.strftime('%Y-%m-%d %H:%M:%S') #formating date for mySQL
+        buff_liste=message.split()    # transforme la string du buffer en liste 
+        logger.debug(buff_liste)
+        print(f"nombre d'élément de la liste : {len(buff_liste)}")
+        buff_liste[0] = datebuff       # remplace la valeur "pm" par la date
+        list_liste = buff_liste [0:nbre_param]# selectionne les valeurs voulues, la valeur (nbre_param)doit correspondre au nombre de %s ci dessous
+        tupl_liste = tuple(list_liste) # transforme la liste en tuple (necessaire pour le INSERT)
+        try:    
+            cursor = db.cursor()
+            cursor.execute(requete, tupl_liste)
+            cursor.close()
+        except mariadb.Error as e:
+            logger.error(f'insert KO {e}')
+            print(f'insert KO {e}')
+    else:
+        logger.debug(message)
 
-    except :
-        logger.error('le if pm est KO, buffer non defini')
-        time.sleep(1)
-        continue
 
-        
-def fermeture(signal,frame):
-    # arret du script 
-    thread1._Thread__stop()
-    thread2._Thread__stop()
-    s.close()   
+    
 
-# interception du signal d'arret du service   pour fermer les threads  
-signal.signal(signal.SIGTERM, fermeture) 
+schedule.every(FREQUENCY).seconds.do(registerData)
+while 1:
+    schedule.run_pending()
+    time.sleep(1)
         
