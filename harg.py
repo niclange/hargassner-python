@@ -28,6 +28,7 @@ import mariadb   # MySQLdb must be installed by yourself
 import sys
 import logging
 import schedule
+import os
 
 
 #----------------------------------------------------------#
@@ -75,7 +76,17 @@ handler_debug.setLevel(logging.DEBUG)
 logger.addHandler(handler_debug)
 
 #----------------------------------------------------------#
-#        socket for Connection to Hargassner               #
+#      init environment variable                           #
+#----------------------------------------------------------#
+
+DB_SERVER = os.getenv('DB_SERVER_HOST',DB_SERVER)
+IP_CHAUDIERE = os.getenv('IP_CHAUD',IP_CHAUDIERE)
+DB_USER = os.getenv('DB_USER',DB_USER)
+DB_PWD = os.getenv('DB_PWD',DB_PWD)
+FIRMWARE_CHAUD = os.getenv('FIRMWARE_CHAUD',FIRMWARE_CHAUD)
+
+#----------------------------------------------------------#
+#       check telnet for Connection to Hargassner          #
 #----------------------------------------------------------#
 i=0 
 while True:
@@ -83,6 +94,7 @@ while True:
         tn = telnetlib.Telnet(host=IP_CHAUDIERE)
         data = tn.read_until(b"\n", timeout=2).decode("ascii")
         print(data)
+        tn.close()
         break
     except:
         logger.critical("Connexion a la chaudiere impossible")
@@ -115,9 +127,7 @@ except mariadb.Error as e:
 def thread_consommation():
     while True:
         try:
-          
             cursor = db.cursor()
-            
             cursor.execute("""SELECT dateB FROM consommation
                             ORDER by dateB DESC LIMIT 1 """)
             result = cursor.fetchone ()
@@ -129,13 +139,11 @@ def thread_consommation():
                                 ORDER by dateB DESC LIMIT 1,1 """)
                 result = cursor.fetchone ()
                 cursor.execute("""INSERT INTO consommation (dateB, conso, Tmoy) VALUES ('%s','%s','%s')""" % (result[0],result[1],result[2]))
-
             db.commit()
             db.close()
         except:
             logger.error('Erreur dans le Thread consommation')
         time.sleep(7200)
-
 
 
 #thread2 = Thread(target=thread_consommation)
@@ -151,7 +159,9 @@ list_champ = ", ?" * nbre_param
 requete = "INSERT INTO data  VALUES (null" + list_champ + ")" # null correspond au champ id
  
 def registerData():
+    tn = telnetlib.Telnet(host=IP_CHAUDIERE)
     message = tn.read_until(b"\n", timeout=2).decode("ascii")
+    tn.close()
     if message[0:2] == "pm":
         datebuff = time.strftime('%Y-%m-%d %H:%M:%S') #formating date for mySQL
         buff_liste=message.split()    # transforme la string du buffer en liste 
@@ -168,7 +178,7 @@ def registerData():
             logger.error(f'insert KO {e}')
             print(f'insert KO {e}')
     else:
-        logger.debug(message)
+        logger.warning(message)
 
 
     
