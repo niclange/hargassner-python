@@ -16,3 +16,5 @@ pip3 install mariadb
 pip3 install schedule
 pip3 install telnetlib3
 ```
+
+I use grafana to visualize data
