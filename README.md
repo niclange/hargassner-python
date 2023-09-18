@@ -18,3 +18,7 @@ pip3 install telnetlib3
 ```
 
 I use grafana to visualize data
+
+Plan:
+ - use victoria metric
+ - use docker compose
