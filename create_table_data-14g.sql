@@ -34,7 +34,7 @@ CREATE TABLE `data` (
 	`c29` DECIMAL(7,2) NOT NULL,
 	`c30` DECIMAL(7,2) NOT NULL,
 	`c31` DECIMAL(7,2) NOT NULL,
-	`MinutesFonctVis` DECIMAL(7,2) NOT NULL,
+	`MinutesFonctVis` INT NOT NULL,
 	`TpsMarcheVe` DECIMAL(7,2) NOT NULL,
 	`c34` DECIMAL(7,2) NOT NULL,
 	`NbMvtGrille` DECIMAL(7,2) NOT NULL,
