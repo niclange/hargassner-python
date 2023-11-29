@@ -5,7 +5,8 @@ CREATE TABLE `data` (
 	`Firmware` DECIMAL(7,2) NOT NULL,
 	`c2` DECIMAL(7,2) NOT NULL,
 	`TempChaudiere` DECIMAL(7,2) NOT NULL,
-	`c4` DECIMAL(7,2) NOT NULL,
+	-- temp command chaudière
+	`c4` DECIMAL(7,2) NOT NULL, 
 	`TempFumee` DECIMAL(7,2) NOT NULL,
 	`c6` DECIMAL(7,2) NOT NULL,
 	`c7` DECIMAL(7,2) NOT NULL,
