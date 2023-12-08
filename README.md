@@ -9,12 +9,17 @@ this script is running on raspberry pi
 it listen an Hargassner NanoPK Boiler on telnet
 and then it write data in MySQL or MariaDB on localhost or anoter server
 
-Module to install
+Module to install for mariadb
 
 ```
 pip3 install mariadb
 pip3 install schedule
 pip3 install telnetlib3
+```
+
+For VictoriaMetrics
+```
+pip3 install prometheus-push-client
 ```
 
 I use grafana to visualize data
