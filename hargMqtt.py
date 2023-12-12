@@ -23,21 +23,26 @@
 # Import socket module
 import telnetlib               
 import time
-
+from hargdata import Heater
+from hargdata import Temperatures
+from hargdata import Boiler
 from datetime import datetime
 import sys
 import logging
 import schedule
 import os
-import prometheus_push_client as ppc
-
+import paho.mqtt.publish as publish
+from dataclasses import dataclass
+from dataclasses_json import dataclass_json
 #----------------------------------------------------------#
 #        parametres                                        #
 #----------------------------------------------------------#
-DB_SERVER = 'victoria'   # MySQL : IP server (localhost si mySQL est sur la meme machine)
-DB_BASE = 'Hargassner'        # MySQL : database name
-DB_USER = 'root'        # MySQL : user  
-DB_PWD = ''           # MySQL : password 
+mqtt_broker_host  = '192.168.1.166'   
+mqtt_topic_tmp = 'home/livingroom/temperature'       
+mqtt_topic_boiler = 'home/hargassner/boiler'
+mqtt_topic_heater = 'home/hargassner/heater'
+mqtt_username = 'home'        
+mqtt_password  = 'myhome56'          
 IP_CHAUDIERE = '192.168.1.84'
 FIRMWARE_CHAUD = 'x'        # firmware de la chaudiere
 
@@ -81,10 +86,10 @@ logger.addHandler(handler_debug)
 
 #DB_SERVER = os.getenv('DB_SERVER_HOST',DB_SERVER)
 IP_CHAUDIERE = os.getenv('IP_CHAUD',IP_CHAUDIERE)
-DB_USER = os.getenv('DB_USER',DB_USER)
-DB_PWD = os.getenv('DB_PWD',DB_PWD)
+mqtt_username = os.getenv('DB_USER',mqtt_username)
+mqtt_password = os.getenv('DB_PWD',mqtt_password)
 FIRMWARE_CHAUD = os.getenv('FIRMWARE_CHAUD',FIRMWARE_CHAUD)
-
+mqtt_broker_host = os.getenv('IP_MQTT',mqtt_broker_host)
 #----------------------------------------------------------#
 #       check telnet for Connection to Hargassner          #
 #----------------------------------------------------------#
@@ -95,65 +100,94 @@ while True:
         data = tn.read_until(b"\n", timeout=2).decode("ascii")
         print(data)
         tn.close()
-        pusher = Pusher("http://localhost:8428/api/v1/write")
         break
     except:
         logger.critical("Connexion a la chaudiere impossible")
         sys.exit("Erreur connexion chaudiere")
-     
+
+
+
   
 
-#------preparation requete----------
-list_champ = ", ?" * nbre_param
-requete = "INSERT INTO data  VALUES (null" + list_champ + ")" # null correspond au champ id
+auth = {'username': mqtt_username, 'password': mqtt_password}
  
 def registerData():
-    metrics = []
     tn = telnetlib.Telnet(host=IP_CHAUDIERE)
     message = tn.read_until(b"\n", timeout=2).decode("ascii")
     tn.close()
     if message[0:2] == "pm":
-        timestamp=int(datetime.now().timestamp())
         buff_liste=message.split()    # transforme la string du buffer en liste 
         logger.debug(buff_liste)
         print(f"nombre d'élément de la liste : {len(buff_liste)}")
-        n = 0
+        n = -1
+        messages = []
+        boiler = Boiler()
+        temps = Temperatures()
+        heater = Heater()
         for data in buff_liste:
-            metric_name = "c"+n
+            metric_name = "c" + str(n)
             labels = {"item": "NanoPK"}
             if n == 0 :
                 metric_name = "status"
+                heater.status = data
             elif n == 3:
                 metric_name = "tmp_chaudiere"
+                heater.tmp_chaudiere = data
             elif n == 5:
-                 metric_name = "tmp_fumee"
+                metric_name = "tmp_fumee"
+                heater.tmp_fumee = data
             elif n == 23:     
                 metric_name = "reel_retour"
+                heater.reel_retour = data
             elif n == 24:     
                 metric_name = "cons_retour"
+                heater.cons_retour = data
             elif n == 15:     
                 metric_name = "tmp_ext"
+                temps.tmp_ext = data
             elif n == 16:     
                 metric_name = "tmp_ext_moyen"
+                heater.tmp_ext_moyen = data
             elif n == 8:
                 metric_name = "puissance"
+                heater.puissance = data
             elif n == 32:
                 metric_name = "minutes_fonct_vis" 
+                heater.minutes_fonct_vis = data
             elif n == 33:        
-                metric_name = "tps_marche_ve" 
+                metric_name = "tps_marche_ve"
+                heater.tps_marche_ve = data
             elif n == 35:        
                 metric_name = "nb_mvt_grille" 
+                heater.nb_mvt_grille = data
             elif n == 56:        
-                metric_name = "tmp_reel_depart" 
+                metric_name = "tmp_reel_depart"
+                heater.tmp_reel_depart = data
             elif n == 58:        
-                metric_name = "tmp_ambiante" 
+                metric_name = "tmp_ambiante"
+                temps.tmp_ambiante = data 
             elif n == 95:
                 metric_name = "tmp_eau_ballon"
-            
-            metric = Metric(metric_name, labels)
-            metric.add_sample("nanopk", data , timestamp=int(datetime.now().timestamp()))
-            pusher.push(metric)
-            n = n+1
+                boiler.tmp_eau_ballon = data
+            n = n + 1
+        
+        msg = {
+            'topic': mqtt_topic_tmp, 
+            'payload': temps.to_json()
+        }
+        messages.append(msg)
+        msg = {
+            'topic': mqtt_topic_boiler, 
+            'payload': boiler.to_json()
+        }
+        messages.append(msg)
+        msg = {
+            'topic': mqtt_topic_heater, 
+            'payload':heater.to_json()
+        }
+        messages.append(msg)
+        publish.multiple(msgs=messages, hostname=mqtt_broker_host, auth=auth )
+           
         
     else:
         logger.warning(message)

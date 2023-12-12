@@ -1,0 +1,5 @@
+schedule
+telnetlib3
+paho-mqtt
+dataclasses
+dataclasses-json
