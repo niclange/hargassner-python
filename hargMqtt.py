@@ -76,8 +76,6 @@ logger = logging.getLogger('log')
 logger.setLevel(logging.DEBUG) # choisir le niveau de log : DEBUG, INFO, ERROR...
 
 handler_debug = logging.basicConfig(level=logging.INFO)
-handler_debug.setFormatter(formatter)
-handler_debug.setLevel(logging.DEBUG)
 logger.addHandler(handler_debug)
 
 #----------------------------------------------------------#
