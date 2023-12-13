@@ -71,12 +71,9 @@ else:
 #----------------------------------------------------------#
 #        definition des logs                               #
 #----------------------------------------------------------#
-formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-logger = logging.getLogger('log')
-logger.setLevel(logging.DEBUG) # choisir le niveau de log : DEBUG, INFO, ERROR...
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger('hargassner')
 
-handler_debug = logging.basicConfig(level=logging.INFO)
-logger.addHandler(handler_debug)
 
 #----------------------------------------------------------#
 #      init environment variable                           #
