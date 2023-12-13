@@ -75,7 +75,7 @@ formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger('log')
 logger.setLevel(logging.DEBUG) # choisir le niveau de log : DEBUG, INFO, ERROR...
 
-handler_debug = logging.FileHandler("trace.log", mode="a", encoding="utf-8")
+handler_debug = logging.basicConfig(level=logging.INFO)
 handler_debug.setFormatter(formatter)
 handler_debug.setLevel(logging.DEBUG)
 logger.addHandler(handler_debug)
@@ -173,20 +173,23 @@ def registerData():
         
         msg = {
             'topic': mqtt_topic_tmp, 
-            'payload': temps.to_json()
+            'payload': temps.to_json(),
+            'retain': True
         }
         messages.append(msg)
         msg = {
             'topic': mqtt_topic_boiler, 
-            'payload': boiler.to_json()
+            'payload': boiler.to_json(),
+            'retain': True
         }
         messages.append(msg)
         msg = {
             'topic': mqtt_topic_heater, 
-            'payload':heater.to_json()
+            'payload':heater.to_json(),
+            'retain': True
         }
         messages.append(msg)
-        publish.multiple(msgs=messages, hostname=mqtt_broker_host, auth=auth )
+        publish.multiple(msgs=messages, hostname=mqtt_broker_host, auth=auth)
            
         
     else:
