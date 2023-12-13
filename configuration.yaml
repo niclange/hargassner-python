@@ -1,0 +1,44 @@
+
+# Loads default set of integrations. Do not remove.
+default_config:
+
+# Load frontend themes from the themes folder
+frontend:
+  themes: !include_dir_merge_named themes
+
+automation: !include automations.yaml
+script: !include scripts.yaml
+scene: !include scenes.yaml
+
+mqtt:
+  sensor:
+    - name: "Temperature sejour"
+      state_topic: "home/livingroom/temperature"
+      unit_of_measurement: "°C"
+      suggested_display_precision: 0.1
+      value_template: "{{ value_json.tmp_ambiante }}"
+    - name: "Temperature exterieur"
+      suggested_display_precision: 0.1
+      state_topic: "home/livingroom/temperature"
+      unit_of_measurement: "°C"
+      value_template: "{{ value_json.tmp_ext }}"
+    - name: "Temperature ballon"
+      suggested_display_precision: 0.1
+      state_topic: "home/hargassner/boiler"
+      unit_of_measurement: "°C"
+      value_template: "{{ value_json.tmp_eau_ballon }}" 
+    - name: "Puissance Chaudidiere"
+      suggested_display_precision: 0.1
+      state_topic: "home/hargassner/heater"
+      unit_of_measurement: "%"
+      value_template: "{{ value_json.puissance }}"
+    - name: "Temperature radiateur"
+      suggested_display_precision: 0.1
+      state_topic: "home/hargassner/heater"
+      unit_of_measurement: "°C"
+      value_template: "{{ value_json.tmp_reel_depart }}"
+    - name: "Temperature chaudiere"
+      suggested_display_precision: 0.1
+      state_topic: "home/hargassner/heater"
+      unit_of_measurement: "°C"
+      value_template: "{{ value_json.tmp_chaudiere }}"
