@@ -3,7 +3,7 @@ ce script tourne sur un Rasberry pi.
 Il ecoute une chaudiere a granulés Hargassner NanoPK sur son port telnet
 et ecrit les valeurs dans une BDD MySQL ou MariaDB 
 
-On peut trouve l'image pour faire la passerelle avec mqtt : niclange/hargassnermqtt
+Cette image permet de faire la passerelle avec mqtt : niclange/hargassnermqtt et d'alimenter Homeassistant.
 -----------------------------------------------------------------------------------------------------
 
 this script is running on raspberry pi
