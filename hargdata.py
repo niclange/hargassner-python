@@ -20,6 +20,8 @@ class Heater:
     tps_marche_ve: float =0
     nb_mvt_grille: int =0
     tmp_reel_depart: float =0
+    qtp_total: int=0
+    stock: int=0
 
 
 @dataclass_json

@@ -164,6 +164,12 @@ def registerData():
             elif n == 95:
                 metric_name = "tmp_eau_ballon"
                 boiler.tmp_eau_ballon = data
+            elif n == 47:
+                metric_name = "quantite_pellet_total"
+                heater.qtp_total = data
+            elif n == 46:
+                metric_name = "quantite_stock"
+                heater.stock = data    
             n = n + 1
         
         msg = {
