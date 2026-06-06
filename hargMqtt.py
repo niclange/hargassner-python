@@ -155,13 +155,13 @@ def registerData():
             elif n == 35:        
                 metric_name = "nb_mvt_grille" 
                 heater.nb_mvt_grille = data
-            elif n == 56:        
+            elif n == 57:        
                 metric_name = "tmp_reel_depart"
                 heater.tmp_reel_depart = data
-            elif n == 58:        
+            elif n == 59:        
                 metric_name = "tmp_ambiante"
                 temps.tmp_ambiante = data 
-            elif n == 76:
+            elif n == 77:
                 metric_name = "tmp_eau_ballon"
                 boiler.tmp_eau_ballon = data
             elif n == 40:
