@@ -132,7 +132,7 @@ def registerData():
             elif n == 8:
                 metric_name = "tmp_fumee"
                 heater.tmp_fumee = data
-            elif n == 64:     
+            elif n == 63:     
                 metric_name = "reel_retour"
                 heater.reel_retour = data
             elif n == 24:     
