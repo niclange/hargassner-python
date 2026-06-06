@@ -128,22 +128,22 @@ def registerData():
             elif n == 3:
                 metric_name = "tmp_chaudiere"
                 heater.tmp_chaudiere = data
-            elif n == 5:
+            elif n == 8:
                 metric_name = "tmp_fumee"
                 heater.tmp_fumee = data
-            elif n == 23:     
+            elif n == 22:     
                 metric_name = "reel_retour"
                 heater.reel_retour = data
             elif n == 24:     
                 metric_name = "cons_retour"
                 heater.cons_retour = data
-            elif n == 15:     
+            elif n == 54:     
                 metric_name = "tmp_ext"
                 temps.tmp_ext = data
-            elif n == 16:     
+            elif n == 55:     
                 metric_name = "tmp_ext_moyen"
                 heater.tmp_ext_moyen = data
-            elif n == 8:
+            elif n == 4:
                 metric_name = "puissance"
                 heater.puissance = data
             elif n == 32:
@@ -161,13 +161,13 @@ def registerData():
             elif n == 58:        
                 metric_name = "tmp_ambiante"
                 temps.tmp_ambiante = data 
-            elif n == 95:
+            elif n == 76:
                 metric_name = "tmp_eau_ballon"
                 boiler.tmp_eau_ballon = data
-            elif n == 47:
+            elif n == 40:
                 metric_name = "quantite_pellet_total"
                 heater.qtp_total = data
-            elif n == 46:
+            elif n == 41:
                 metric_name = "quantite_stock"
                 heater.stock = data    
             n = n + 1
