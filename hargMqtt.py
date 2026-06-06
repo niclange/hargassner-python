@@ -21,7 +21,7 @@
 # to create the database, use the query in createBDD.sql
 
 # Import socket module
-import telnetlib               
+import telnetlib3.telnetlib as telnetlib
 import time
 from hargdata import Heater
 from hargdata import Temperatures
@@ -169,7 +169,7 @@ def registerData():
                 heater.qtp_total = data
             elif n == 41:
                 metric_name = "quantite_stock"
-                heater.stock = data    
+                heater.stock = data
             n = n + 1
         
         msg = {

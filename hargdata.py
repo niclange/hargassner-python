@@ -23,7 +23,6 @@ class Heater:
     qtp_total: int=0
     stock: int=0
 
-
 @dataclass_json
 @dataclass(init=True)
 class Temperatures:
