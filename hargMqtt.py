@@ -113,6 +113,7 @@ def registerData():
     if message[0:2] == "pm":
         buff_liste=message.split()    # transforme la string du buffer en liste 
         logger.debug(buff_liste)
+        print(f"{buff_liste}")
         print(f"nombre d'élément de la liste : {len(buff_liste)}")
         n = -1
         messages = []
@@ -131,7 +132,7 @@ def registerData():
             elif n == 8:
                 metric_name = "tmp_fumee"
                 heater.tmp_fumee = data
-            elif n == 22:     
+            elif n == 63:     
                 metric_name = "reel_retour"
                 heater.reel_retour = data
             elif n == 24:     
@@ -158,13 +159,13 @@ def registerData():
             elif n == 57:        
                 metric_name = "tmp_reel_depart"
                 heater.tmp_reel_depart = data
-            elif n == 59:        
+            elif n == 65:        
                 metric_name = "tmp_ambiante"
                 temps.tmp_ambiante = data 
-            elif n == 77:
+            elif n == 83:
                 metric_name = "tmp_eau_ballon"
                 boiler.tmp_eau_ballon = data
-            elif n == 40:
+            elif n == 42:
                 metric_name = "quantite_pellet_total"
                 heater.qtp_total = data
             elif n == 41:
